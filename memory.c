@@ -112,7 +112,8 @@ void insert_ptab_dir(uint32_t * dir, uint32_t *tab, uint32_t vaddr,
  * Swap out a page if no space is available. 
  */
 int page_alloc(int pinned){
-  for(int i = 0; i < PAGEABLE_PAGES; i++) {
+  int i;
+  for(i = 0; i < PAGEABLE_PAGES; i++) {
     if(page_map[i].free == 1) {
       page_map[i].pinned = pinned;
       page_map[i].is_table = FALSE;
@@ -120,6 +121,8 @@ int page_alloc(int pinned){
       return i;
     }
   }
+  ASSERT(-1);
+  return -1;
 }
 
 /* TODO: Set up kernel memory for kernel threads to run.
@@ -131,7 +134,8 @@ void init_memory(void){
   uint32_t vaddr = MEM_START;
 
   // initialize
-  for (int i = 0; i < PAGEABLE_PAGES; i++)
+  int i, j;
+  for (i = 0; i < PAGEABLE_PAGES; i++)
   {
     page_map[i].is_table = FALSE;
     page_map[i].free = TRUE;
@@ -146,15 +150,15 @@ void init_memory(void){
 
   vaddr += PAGE_SIZE;
 
-  for (int i = 0; i < N_KERNEL_PTS; i++)
+  for (i = 0; i < N_KERNEL_PTS; i++)
   {
     page_map[i+1].free = FALSE;
     page_map[i+1].pinned = TRUE;
     kernel_ptabs[i] = page_addr(i+1);
-    mode = 7;
+    int mode = 7;
     insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
 
-    for (int j = 0; j < PAGE_N_ENTRIES; j++)
+    for (j = 0; j < PAGE_N_ENTRIES; j++)
     {
       vaddr += PAGE_SIZE;
       if (vaddr >= MAX_PHYSICAL_MEMORY)
@@ -165,7 +169,7 @@ void init_memory(void){
   }
 
   // Give user permission to use the memory pages associated with the screen
-  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*?);
+  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*/);
  
 }
 
@@ -177,7 +181,8 @@ void setup_page_table(pcb_t * p){
   if (p->is_thread) {
     p->page_directory = kernel_pdir;
   }
-  for(int i = 0; i < page_num; i++) {
+  int i;
+  for(i = 0; i < page_num; i++) {
     uint32_t page_idx = page_alloc(0);
     uint32_t paddr = page_addr(page_idx);
 

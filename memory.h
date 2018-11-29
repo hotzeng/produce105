@@ -24,7 +24,7 @@ enum {
   PE_PCD = 1 << 4, /* page cache disable */
   PE_A = 1 << 5, /* accessed */
   PE_D = 1 << 6, /* dirty */
-  PE_BASE_ADDR_BITS = 12,  /* position of base address */
+  PE_BASE_ADDR_BITS = 12,  /* position oisf base address */
   // 12 bits because PAGE_SIZE = 4096
   PE_BASE_ADDR_MASK = 0xfffff000,  /* extracts the base address */
 
@@ -52,9 +52,9 @@ enum {
 typedef struct {
 	uint32_t	swap_loc;
 	uint32_t	vaddr;
-  bool      is_table;
-  bool      free;
-  bool      pinned;
+  int      is_table;
+  int      free;
+  int      pinned;
 	// Fill in ...
 } page_map_entry_t;
 
