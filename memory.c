@@ -52,7 +52,7 @@ uint32_t get_tab_idx(uint32_t vaddr){
 
 /* TODO: Returns physical address of page number i */
 uint32_t* page_addr(int i){
-
+  return (uint32_t *) (MEM_START + i*PAGE_SIZE);
 }
 
 /* Set flags in a page table entry to 'mode' */
@@ -115,6 +115,8 @@ int page_alloc(int pinned){
   for(int i = 0; i < PAGEABLE_PAGES; i++) {
     if(page_map[i].free == 1) {
       page_map[i].pinned = pinned;
+      page_map[i].is_table = FALSE;
+      page_map[i].free = FALSE;
       return i;
     }
   }
@@ -126,7 +128,45 @@ int page_alloc(int pinned){
  * supposed to set up the page directory and page tables for the kernel.
  */
 void init_memory(void){
+  uint32_t vaddr = MEM_START;
 
+  // initialize
+  for (int i = 0; i < PAGEABLE_PAGES; i++)
+  {
+    page_map[i].is_table = FALSE;
+    page_map[i].free = TRUE;
+    page_map[i].pinned = FALSE;
+  }
+
+  // pin page directory for kernel
+  page_map[0].is_table = TRUE;
+  page_map[0].free = FALSE;
+  page_map[0].pinned = TRUE;
+  kernel_pdir =page_addr(0);
+
+  vaddr += PAGE_SIZE;
+
+  for (int i = 0; i < N_KERNEL_PTS; i++)
+  {
+    page_map[i+1].free = FALSE;
+    page_map[i+1].pinned = TRUE;
+    kernel_ptabs[i] = page_addr(i+1);
+    mode = 7;
+    insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
+
+    for (int j = 0; j < PAGE_N_ENTRIES; j++)
+    {
+      vaddr += PAGE_SIZE;
+      if (vaddr >= MAX_PHYSICAL_MEMORY)
+        break;
+      mode = 7;
+      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
+    }
+  }
+
+  // Give user permission to use the memory pages associated with the screen
+  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*?);
+ 
 }
 
 
