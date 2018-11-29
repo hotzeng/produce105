@@ -158,14 +158,14 @@ void init_memory(void){
     int mode = 7;
     insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
 
-    for (j = 0; j < PAGE_N_ENTRIES; j++)
-    {
-      vaddr += PAGE_SIZE;
-      if (vaddr >= MAX_PHYSICAL_MEMORY)
-        break;
-      mode = 7;
-      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
-    }
+    //for (j = 0; j < PAGE_N_ENTRIES; j++)
+    //{
+    //  vaddr += PAGE_SIZE;
+    //  if (vaddr >= MAX_PHYSICAL_MEMORY)
+    //    break;
+    //  mode = 7;
+    //  init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
+    //}
   }
 
   // Give user permission to use the memory pages associated with the screen
@@ -177,7 +177,8 @@ void init_memory(void){
 /* TODO: Set up a page directory and page table for a new 
  * user process or thread. */
 void setup_page_table(pcb_t * p){
-  uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE;
+  // TODO: Not sure how many pages for each kernel
+  uint32_t page_num = 1;//p->swap_size * SECTOR_SIZE / PAGE_SIZE;
   if (p->is_thread) {
     p->page_directory = kernel_pdir;
   }
@@ -191,7 +192,7 @@ void setup_page_table(pcb_t * p){
     int idx = get_dir_idx(vaddr);    
     uint32_t table = p->page_directory[idx];
     uint32_t mode = 7;
-    init_ptab_entry( &table, vaddr, paddr, mode );
+    init_ptab_entry( table, vaddr, paddr, mode );
   }
 }
 
