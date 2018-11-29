@@ -52,6 +52,9 @@ enum {
 typedef struct {
 	uint32_t	swap_loc;
 	uint32_t	vaddr;
+  bool      is_table;
+  bool      free;
+  bool      pinned;
 	// Fill in ...
 } page_map_entry_t;
 
