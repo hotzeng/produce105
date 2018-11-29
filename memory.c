@@ -24,6 +24,8 @@
 #include "tlb.h"
 #include "usb/scsi.h"
 
+#define SECTOR_SIZE 512
+
 /* Static global variables */
 // Keep track of all pages: their vaddr, status, and other properties
 static page_map_entry_t page_map[PAGEABLE_PAGES];
@@ -35,7 +37,7 @@ static uint32_t *kernel_pdir;
 static uint32_t *kernel_ptabs[N_KERNEL_PTS];
 
 //other global variables...
-
+static uint32_t kernel_vaddr_next = 0;
 /* Main API */
 
 /* Use virtual address to get index in page directory. */
@@ -110,7 +112,12 @@ void insert_ptab_dir(uint32_t * dir, uint32_t *tab, uint32_t vaddr,
  * Swap out a page if no space is available. 
  */
 int page_alloc(int pinned){
-  
+  for(int i = 0; i < PAGEABLE_PAGES; i++) {
+    if(page_map[i].free == 1) {
+      page_map[i].pinned = pinned;
+      return i;
+    }
+  }
 }
 
 /* TODO: Set up kernel memory for kernel threads to run.
@@ -119,14 +126,28 @@ int page_alloc(int pinned){
  * supposed to set up the page directory and page tables for the kernel.
  */
 void init_memory(void){
- 
+
 }
 
 
 /* TODO: Set up a page directory and page table for a new 
  * user process or thread. */
 void setup_page_table(pcb_t * p){
-  
+  uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE;
+  if (p->is_thread) {
+    p->page_directory = kernel_pdir;
+  }
+  for(int i = 0; i < page_num; i++) {
+    uint32_t page_idx = page_alloc(0);
+    uint32_t paddr = page_addr(page_idx);
+
+    uint32_t vaddr = paddr;
+    // get the table for kernel
+    int idx = get_dir_idx(vaddr);    
+    uint32_t table = p->page_directory[idx];
+    uint32_t mode = 7;
+    init_ptab_entry( &table, vaddr, paddr, mode );
+  }
 }
 
 /* TODO: Swap into a free page upon a page fault.
