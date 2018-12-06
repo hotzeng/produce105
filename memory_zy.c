@@ -195,7 +195,7 @@ void setup_page_table(pcb_t * p){
   p->page_directory = page_addr(page_idx);
 
   // set page table
-  uint32_t vaddr = 0;
+  uint32_t vaddr = PROCESS_START;
   page_idx = page_alloc(1);
   page_map[page_idx].is_table = TRUE;
   insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
@@ -220,10 +220,12 @@ void setup_page_table(pcb_t * p){
   insert_ptab_dir(p->page_directory, stack_table, p->user_stack, PE_P|PE_RW|PE_US); // mode??
 
   // allocate stack pages
-  for(i = 0; i < 2; i++) {
-     init_ptab_entry(stack_table, vaddr, vaddr, PE_P|PE_RW|PE_US);    
+  for(i = 0; i < N_PROCESS_STACK_PAGES; i++) {
+    page_idx = page_alloc(0);
+    uint32_t stack_page = page_addr(page_idx);
+    init_ptab_entry(stack_table, p->user_stack + i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
   }
-  
+ 
 }
 
 /* TODO: Swap into a free page upon a page fault.
