@@ -163,20 +163,16 @@ void init_memory(void){
     int mode = 7;
     insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
 
-    //for (j = 0; j < PAGE_N_ENTRIES; j++)
-    //{
-    //  vaddr += PAGE_SIZE;
-    //  if (vaddr >= MAX_PHYSICAL_MEMORY)
-    //    break;
-    //  mode = 7;
-    //  init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
-    //}
+    for (j = 0; j < PAGE_N_ENTRIES; j++)
+    {
+     vaddr += PAGE_SIZE;
+     if (vaddr >= MEM_START)
+       break;
+     mode = 7;
+     init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
+    }
   }
 
-  // setup the page table and pages for screen, by yuzeng
-  uint32_t screen_dir_idx = get_dir_idx(SCREEN_ADDR);
-  uint32_t screen_tab_idx = get_tab_idx(SCREEN_ADDR);
-  insert_ptab_dir(kernel_pdir, )
 
   // Give user permission to use the memory pages associated with the screen
   set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*/);
@@ -191,20 +187,21 @@ void setup_page_table(pcb_t * p){
   uint32_t page_num = 1;//p->swap_size * SECTOR_SIZE / PAGE_SIZE;
   if (p->is_thread) {
     p->page_directory = kernel_pdir;
+    return;
   }
-  int i;
-  for(i = 0; i < page_num; i++) {
-    uint32_t page_idx = page_alloc(0);
-    uint32_t paddr = page_addr(page_idx);
+  // int i;
+  // for(i = 0; i < page_num; i++) {
+  //   uint32_t page_idx = page_alloc(0);
+  //   uint32_t paddr = page_addr(page_idx);
 
-    // TODO: modify vaddr later
-    uint32_t vaddr = paddr;
-    // get the table for kernel
-    int idx = get_dir_idx(vaddr);    
-    uint32_t table = p->page_directory[idx];
-    uint32_t mode = 7;
-    init_ptab_entry( table, vaddr, paddr, mode );
-  }
+  //   // TODO: modify vaddr later
+  //   uint32_t vaddr = paddr;
+  //   // get the table for kernel
+  //   int idx = get_dir_idx(vaddr);    
+  //   uint32_t table = p->page_directory[idx];
+  //   uint32_t mode = 7;
+  //   init_ptab_entry( table, vaddr, paddr, mode );
+  // }
 }
 
 /* TODO: Swap into a free page upon a page fault.
