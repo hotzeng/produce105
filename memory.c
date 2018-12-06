@@ -150,10 +150,14 @@ void init_memory(void){
 
   vaddr += PAGE_SIZE;
 
+  // initialize the kernel page tables
   for (i = 0; i < N_KERNEL_PTS; i++)
   {
     page_map[i+1].free = FALSE;
     page_map[i+1].pinned = TRUE;
+    // modified by yuzeng
+    page_map[i+1].is_table = TRUE;
+    
     kernel_ptabs[i] = page_addr(i+1);
     int mode = 7;
     insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
@@ -167,6 +171,11 @@ void init_memory(void){
     //  init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
     //}
   }
+
+  // setup the page table and pages for screen, by yuzeng
+  uint32_t screen_dir_idx = get_dir_idx(SCREEN_ADDR);
+  uint32_t screen_tab_idx = get_tab_idx(SCREEN_ADDR);
+  insert_ptab_dir(kernel_pdir, )
 
   // Give user permission to use the memory pages associated with the screen
   set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*/);
@@ -187,6 +196,7 @@ void setup_page_table(pcb_t * p){
     uint32_t page_idx = page_alloc(0);
     uint32_t paddr = page_addr(page_idx);
 
+    // TODO: modify vaddr later
     uint32_t vaddr = paddr;
     // get the table for kernel
     int idx = get_dir_idx(vaddr);    
