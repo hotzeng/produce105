@@ -38,6 +38,10 @@ static uint32_t *kernel_ptabs[N_KERNEL_PTS];
 
 //other global variables...
 static uint32_t kernel_vaddr_next = 0;
+
+// lock used in page_fault_handler
+static lock_t page_fault_lock;
+
 /* Main API */
 
 /* Use virtual address to get index in page directory. */
@@ -112,17 +116,25 @@ void insert_ptab_dir(uint32_t * dir, uint32_t *tab, uint32_t vaddr,
  * Swap out a page if no space is available. 
  */
 int page_alloc(int pinned){
+  int index = -1;
   int i;
   for(i = 0; i < PAGEABLE_PAGES; i++) {
     if(page_map[i].free == 1) {
-      page_map[i].pinned = pinned;
-      page_map[i].is_table = FALSE;
-      page_map[i].free = FALSE;
-      return i;
+      index = i;
+      break;
     }
   }
-  ASSERT(-1);
-  return -1;
+
+  if (index == -1) {
+    index = page_replacement_policy();
+    page_swap_out(index);
+
+  }
+
+  page_map[index].pinned = pinned;
+  page_map[index].is_table = FALSE;
+  page_map[index].free = FALSE;
+  return index;
 }
 
 /* TODO: Set up kernel memory for kernel threads to run.
@@ -134,6 +146,7 @@ void init_memory(void){
   uint32_t vaddr = 0;
 
   // initialize
+  uint32_t vaddr = 0;
   int i, j;
   for (i = 0; i < PAGEABLE_PAGES; i++)
   {
@@ -175,33 +188,58 @@ void init_memory(void){
 
 
   // Give user permission to use the memory pages associated with the screen
-  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_US /* and more MODE??*/);
+  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, 7 /* and more MODE??*/);
  
 }
 
 
 /* TODO: Set up a page directory and page table for a new 
  * user process or thread. */
+// copied from memory_zy.c
 void setup_page_table(pcb_t * p){
   // TODO: Not sure how many pages for each kernel
-  uint32_t page_num = 1;//p->swap_size * SECTOR_SIZE / PAGE_SIZE;
   if (p->is_thread) {
     p->page_directory = kernel_pdir;
     return;
   }
-  // int i;
-  // for(i = 0; i < page_num; i++) {
-  //   uint32_t page_idx = page_alloc(0);
-  //   uint32_t paddr = page_addr(page_idx);
 
-  //   // TODO: modify vaddr later
-  //   uint32_t vaddr = paddr;
-  //   // get the table for kernel
-  //   int idx = get_dir_idx(vaddr);    
-  //   uint32_t table = p->page_directory[idx];
-  //   uint32_t mode = 7;
-  //   init_ptab_entry( table, vaddr, paddr, mode );
-  // }
+  // if it is process, set the directory
+  uint32_t page_idx = page_alloc(1);
+  page_map[page_idx].is_table = TRUE;
+  p->page_directory = page_addr(page_idx);
+
+  // set page table
+  uint32_t vaddr = PROCESS_START;
+  page_idx = page_alloc(1);
+  page_map[page_idx].is_table = TRUE;
+  insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
+   
+  uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE; 
+  uint32_t i;
+  // write page table entries
+  for(i = 0; i < page_num; i++) {
+    uint32_t page_idx = page_alloc(0);
+    uint32_t paddr = page_addr(page_idx);
+    // get the table for kernel
+    int idx = get_dir_idx(vaddr);    
+    uint32_t table = p->page_directory[idx];
+    uint32_t mode = 7;
+    init_ptab_entry( table, vaddr, paddr, mode );
+    vaddr += PAGE_SIZE;
+  }
+  
+  // allocate stack page table
+  page_idx = page_alloc(1);
+  uint32_t stack_table = page_addr(page_idx);
+  insert_ptab_dir(p->page_directory, stack_table, p->user_stack, PE_P|PE_RW|PE_US); // mode??
+
+  // allocate stack pages
+  for(i = 0; i < N_PROCESS_STACK_PAGES; i++) {
+    page_idx = page_alloc(0);
+    uint32_t stack_page = page_addr(page_idx);
+    init_ptab_entry(stack_table, p->user_stack + i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
+  }
+  
 }
 
 /* TODO: Swap into a free page upon a page fault.
@@ -209,6 +247,24 @@ void setup_page_table(pcb_t * p){
  * Should handle demand paging.
  */
 void page_fault_handler(void){
+  lock_acquire(&page_fault_lock);
+
+  uint32_t vaddr = current_running->fault_addr; 
+
+
+  current_running->page_fault_count++;
+  int i = page_alloc(0); //require complete implementation of page_alloc!!
+
+  page_swap_in(i);
+
+  // remember to set swap_loc at beginning
+  page_map[i].swap_loc = current_running->swap_loc;
+  page_map[i].vaddr = vaddr;
+
+  uint32_t dir = get_dir_idx(vaddr);
+  init_ptab_entry(current_running->page_directory[dir], vaddr, page_addr(i), 7);
+
+  lock_release(&page_fault_lock);
   
 }
 
@@ -221,6 +277,10 @@ int get_disk_sector(page_map_entry_t * page){
 
 /* TODO: Swap i-th page in from disk (i.e. the image file) */
 void page_swap_in(int i){
+  uint32_t * page_table;
+  int dist_sector = get_disk_sector(&page_map[i]);
+
+  scsi_read(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
   
 }
 
@@ -231,7 +291,7 @@ void page_swap_in(int i){
  * 
  */
 void page_swap_out(int i){
-  
+
 }
 
 
