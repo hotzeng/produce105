@@ -131,7 +131,7 @@ int page_alloc(int pinned){
  * supposed to set up the page directory and page tables for the kernel.
  */
 void init_memory(void){
-  uint32_t vaddr = MEM_START;
+  uint32_t vaddr = 0;
 
   // initialize
   int i, j;
@@ -148,7 +148,8 @@ void init_memory(void){
   page_map[0].pinned = TRUE;
   kernel_pdir =page_addr(0);
 
-  vaddr += PAGE_SIZE;
+  // modified by yuzeng
+  //vaddr += PAGE_SIZE;
 
   // initialize the kernel page tables
   for (i = 0; i < N_KERNEL_PTS; i++)
