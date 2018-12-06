@@ -38,6 +38,9 @@ static uint32_t *kernel_ptabs[N_KERNEL_PTS];
 
 //other global variables...
 static uint32_t kernel_vaddr_next = 0;
+static uint32_t fifo_queue[PAGEABLE_PAGES];
+static uint32_t head = 0;
+static uint32_t tail = 0;
 
 // lock used in page_fault_handler
 static lock_t page_fault_lock;
@@ -115,6 +118,7 @@ void insert_ptab_dir(uint32_t * dir, uint32_t *tab, uint32_t vaddr,
  * Marks page as pinned if pinned == TRUE. 
  * Swap out a page if no space is available. 
  */
+// enqueue fifo operations are done in this function
 int page_alloc(int pinned){
   int index = -1;
   int i;
@@ -128,8 +132,10 @@ int page_alloc(int pinned){
   if (index == -1) {
     index = page_replacement_policy();
     page_swap_out(index);
-
   }
+  // modified by yuzeng
+  if(!pinned)
+    fifo_queue[head++] = index;
 
   page_map[index].pinned = pinned;
   page_map[index].is_table = FALSE;
@@ -189,7 +195,6 @@ void init_memory(void){
 
   // Give user permission to use the memory pages associated with the screen
   set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, 7 /* and more MODE??*/);
- 
 }
 
 
@@ -255,11 +260,11 @@ void page_fault_handler(void){
   current_running->page_fault_count++;
   int i = page_alloc(0); //require complete implementation of page_alloc!!
 
-  page_swap_in(i);
-
   // remember to set swap_loc at beginning
   page_map[i].swap_loc = current_running->swap_loc;
   page_map[i].vaddr = vaddr;
+
+  page_swap_in(i);
 
   uint32_t dir = get_dir_idx(vaddr);
   init_ptab_entry(current_running->page_directory[dir], vaddr, page_addr(i), 7);
@@ -297,5 +302,7 @@ void page_swap_out(int i){
 
 /* TODO: Decide which page to replace, return the page number  */
 int page_replacement_policy(void){
- 
+  if(head == tail) 
+    ASSERT(0);
+  return fifo_queue[tail++]; 
 }
