@@ -152,7 +152,6 @@ void init_memory(void){
   uint32_t vaddr = 0;
 
   // initialize
-  uint32_t vaddr = 0;
   int i, j;
   for (i = 0; i < PAGEABLE_PAGES; i++)
   {
@@ -229,6 +228,8 @@ void setup_page_table(pcb_t * p){
     int idx = get_dir_idx(vaddr);    
     uint32_t table = p->page_directory[idx];
     uint32_t mode = 7;
+    page_map[page_idx].swap_loc = p->swap_loc;
+    page_map[page_idx].vaddr = vaddr;
     init_ptab_entry( table, vaddr, paddr, mode );
     vaddr += PAGE_SIZE;
   }
@@ -282,11 +283,10 @@ int get_disk_sector(page_map_entry_t * page){
 
 /* TODO: Swap i-th page in from disk (i.e. the image file) */
 void page_swap_in(int i){
-  uint32_t * page_table;
-  int dist_sector = get_disk_sector(&page_map[i]);
+  int disk_sector = get_disk_sector(&page_map[i]);
 
   scsi_read(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
-  
+  flush_tlb_entry(page_map[i].vaddr);
 }
 
 /* TODO: Swap i-th page out to disk.
@@ -296,7 +296,9 @@ void page_swap_in(int i){
  * 
  */
 void page_swap_out(int i){
-
+  int disk_sector = get_disk_sector(&page_map[i]);
+  scsi_write(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
+  flush_tlb_entry(page_map[i].vaddr);
 }
 
 
