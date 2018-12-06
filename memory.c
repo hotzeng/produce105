@@ -150,8 +150,9 @@ int page_alloc(int pinned){
  */
 void init_memory(void){
   uint32_t vaddr = 0;
-
+  
   // initialize
+  lock_init(&page_fault_lock);
   int i, j;
   for (i = 0; i < PAGEABLE_PAGES; i++)
   {
