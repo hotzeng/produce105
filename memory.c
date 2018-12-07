@@ -1,5 +1,5 @@
-/* Author(s): <Your name here>
- * COS 318, Fall 2015: Project 5 Virtual Memory
+/* Author(s): Yu Zeng, Yuyan Zhao
+ * COS 318, Fall 2018: Project 5 Virtual Memory
  * Implementation of the memory manager for the kernel.
 */
 
@@ -39,8 +39,8 @@ static uint32_t *kernel_ptabs[N_KERNEL_PTS];
 //other global variables...
 static uint32_t kernel_vaddr_next = 0;
 static uint32_t fifo_queue[PAGEABLE_PAGES];
-static uint32_t head = 0;
-static uint32_t tail = 0;
+static uint32_t head;
+static uint32_t tail;
 
 // lock used in page_fault_handler
 static lock_t page_fault_lock;
@@ -141,7 +141,10 @@ int page_alloc(int pinned){
   page_map[index].is_table = FALSE;
   page_map[index].free = FALSE;
 
-  bzero((char *)page_addr(index), PAGE_SIZE);
+  //bzero((char *)page_addr(index), PAGE_SIZE);
+  for (i = 0; i < PAGE_N_ENTRIES; ++i) {
+    bzero((char *)(page_addr(index) + i), sizeof(uint32_t) / sizeof(char));
+  }
 
   return index;
 }
@@ -156,6 +159,7 @@ void init_memory(void){
   
   // initialize
   lock_init(&page_fault_lock);
+  head = tail = 0;
   int i, j;
   for (i = 0; i < PAGEABLE_PAGES; i++)
   {
@@ -170,6 +174,10 @@ void init_memory(void){
   page_map[0].pinned = TRUE;
   kernel_pdir =page_addr(0);
 
+  for (i = 0; i < PAGE_N_ENTRIES; i++) {
+    bzero((char *)(kernel_pdir[i]), sizeof(uint32_t) / sizeof(char));
+  }
+
   // modified by yuzeng
   // vaddr += PAGE_SIZE;
 
@@ -182,22 +190,20 @@ void init_memory(void){
     page_map[i+1].is_table = TRUE;
     
     kernel_ptabs[i] = page_addr(i+1);
-    int mode = 3;
-    insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
+    insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, PE_P | PE_RW);
 
     for (j = 0; j < PAGE_N_ENTRIES; j++)
     {
-     if (vaddr >= MEM_START)
-       break;
-     mode = 3;
-     init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
-      vaddr += PAGE_SIZE;
+      if (vaddr >= MAX_PHYSICAL_MEMORY)
+        break;
+      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, PE_P | PE_RW);
+       vaddr += PAGE_SIZE;
     }
   }
 
 
   // Give user permission to use the memory pages associated with the screen
-  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, 7 /* and more MODE??*/);
+  set_ptab_entry_flags(kernel_pdir, SCREEN_ADDR, PE_RW | PE_P | PE_US/* and more MODE??*/);
 }
 
 
@@ -216,14 +222,19 @@ void setup_page_table(pcb_t * p){
   page_map[page_idx].is_table = TRUE;
   p->page_directory = page_addr(page_idx);
 
+  uint32_t i;
+  for (i = 0; i < PAGE_N_ENTRIES; ++i) {
+    bzero((char *)(p->page_directory[i]), sizeof(uint32_t) / sizeof(char));
+  }
+
   // set page table
   uint32_t vaddr = PROCESS_START;
   page_idx = page_alloc(1);
   page_map[page_idx].is_table = TRUE;
-  insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
+  insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, 3); // only one page table for each process ???
+  //insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
    
   uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE; 
-  uint32_t i;
   // write page table entries
   for(i = 0; i < page_num; i++) {
     uint32_t page_idx = page_alloc(0);
