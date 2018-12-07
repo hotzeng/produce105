@@ -182,7 +182,7 @@ void init_memory(void){
     page_map[i+1].is_table = TRUE;
     
     kernel_ptabs[i] = page_addr(i+1);
-    int mode = 7;
+    int mode = 3;
     insert_ptab_dir(kernel_pdir, kernel_ptabs[i], vaddr, mode);
 
     for (j = 0; j < PAGE_N_ENTRIES; j++)
@@ -190,7 +190,7 @@ void init_memory(void){
      vaddr += PAGE_SIZE;
      if (vaddr >= MEM_START)
        break;
-     mode = 7;
+     mode = 3;
      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
     }
   }

@@ -55,11 +55,11 @@ static int next_stack = STACK_MIN;
  * kernel.
  */
 static func_t start_addr[NUM_THREADS] = {
-  (func_t) loader_thread,  /* Loads shell */
+  //(func_t) loader_thread,  /* Loads shell */
   (func_t) clock_thread,  /* Running indefinitely */
   (func_t) usb_thread, /* Scans USB hub port */
-  (func_t) thread2,  /* Test thread */
-  (func_t) thread3  /* Test thread */
+  //(func_t) thread2,  /* Test thread */
+  //(func_t) thread3  /* Test thread */
 };
 
 /*
@@ -621,6 +621,8 @@ static pcb_t *alloc_pcb()
  */
 static void insert_pcb(pcb_t * p)
 {
+  // debug
+  scrprintf(2+p->pid, 1, "%d into ready queue", p->pid);
   long eflags;
 
   /* Make sure we're not interrupted */

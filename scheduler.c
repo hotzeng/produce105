@@ -86,6 +86,8 @@ void scheduler(void)
   } while (current_running->status != RUNNING);
 
   /* .. and run it */
+  // debug
+  scrprintf(5+current_running->pid, 1, "%d: schedule %d", get_timer(), current_running->pid);
   dispatch();
 }
 
@@ -219,6 +221,8 @@ static void insert_job(pcb_t * job, pcb_t * q)
 /* Remove 'job' from the ready queue */
 static void remove_job(pcb_t * job)
 {
+  // debug
+  scrprintf(10, 1, "%d:remove %d from rq", get_timer(), job->pid);
   job->previous->next = job->next;
   job->next->previous = job->previous;
 }
