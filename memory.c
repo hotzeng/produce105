@@ -171,7 +171,7 @@ void init_memory(void){
   kernel_pdir =page_addr(0);
 
   // modified by yuzeng
-  //vaddr += PAGE_SIZE;
+  // vaddr += PAGE_SIZE;
 
   // initialize the kernel page tables
   for (i = 0; i < N_KERNEL_PTS; i++)
@@ -187,11 +187,11 @@ void init_memory(void){
 
     for (j = 0; j < PAGE_N_ENTRIES; j++)
     {
-     vaddr += PAGE_SIZE;
      if (vaddr >= MEM_START)
        break;
      mode = 3;
      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, mode);
+      vaddr += PAGE_SIZE;
     }
   }
 
@@ -245,7 +245,7 @@ void setup_page_table(pcb_t * p){
 
   // allocate stack pages
   for(i = 0; i < N_PROCESS_STACK_PAGES; i++) {
-    page_idx = page_alloc(0);
+    page_idx = page_alloc(1);
     uint32_t stack_page = page_addr(page_idx);
     init_ptab_entry(stack_table, p->user_stack + i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
   }
