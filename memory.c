@@ -140,6 +140,9 @@ int page_alloc(int pinned){
   page_map[index].pinned = pinned;
   page_map[index].is_table = FALSE;
   page_map[index].free = FALSE;
+
+  bzero((char *)page_addr(index), PAGE_SIZE);
+
   return index;
 }
 
@@ -254,6 +257,8 @@ void setup_page_table(pcb_t * p){
  * Should handle demand paging.
  */
 void page_fault_handler(void){
+  // debug
+  scrprintf(1, 1, "%d:%d enter page_fault_handler", get_timer(), current_running->pid);
   lock_acquire(&page_fault_lock);
 
   uint32_t vaddr = current_running->fault_addr; 
@@ -287,6 +292,8 @@ void page_swap_in(int i){
   int disk_sector = get_disk_sector(&page_map[i]);
 
   scsi_read(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
+  // set the mode of the page table entry
+  set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 7); 
   flush_tlb_entry(page_map[i].vaddr);
 }
 
@@ -299,6 +306,7 @@ void page_swap_in(int i){
 void page_swap_out(int i){
   int disk_sector = get_disk_sector(&page_map[i]);
   scsi_write(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
+  set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 0); 
   flush_tlb_entry(page_map[i].vaddr);
 }
 
