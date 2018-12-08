@@ -3,6 +3,11 @@
  * Implementation of the memory manager for the kernel.
 */
 
+// TODO: 
+// 1. the first entry of process table should point to kernel page table, so that the interrupt could find the physical addr between 0 and 1MB 
+// 2. on-demand paging!
+// 3. every page should know its owner, so that when it is paged out, its present bit can be reset.
+
 /* memory.c
  *
  * Note: 
@@ -221,6 +226,8 @@ void setup_page_table(pcb_t * p){
   uint32_t page_idx = page_alloc(1);
   page_map[page_idx].is_table = TRUE;
   p->page_directory = page_addr(page_idx);
+  insert_ptab_dir(p->page_directory, kernel_ptabs[0], 0, 7); // only one page table for each process ???
+
 
   uint32_t i;
   for (i = 0; i < PAGE_N_ENTRIES; ++i) {
@@ -231,7 +238,7 @@ void setup_page_table(pcb_t * p){
   uint32_t vaddr = PROCESS_START;
   page_idx = page_alloc(1);
   page_map[page_idx].is_table = TRUE;
-  insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, 3); // only one page table for each process ???
+  insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, 7); // only one page table for each process ???
   //insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
    
   uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE; 
@@ -258,7 +265,7 @@ void setup_page_table(pcb_t * p){
   for(i = 0; i < N_PROCESS_STACK_PAGES; i++) {
     page_idx = page_alloc(1);
     uint32_t stack_page = page_addr(page_idx);
-    init_ptab_entry(stack_table, p->user_stack + i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
+    init_ptab_entry(stack_table, p->user_stack - i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
   }
   
 }
@@ -269,7 +276,7 @@ void setup_page_table(pcb_t * p){
  */
 void page_fault_handler(void){
   // debug
-  scrprintf(1, 1, "%d:%d enter page_fault_handler", get_timer(), current_running->pid);
+  //scrprintf(1, 1, "%d:%d enter page_fault_handler", get_timer(), current_running->pid);
   lock_acquire(&page_fault_lock);
 
   uint32_t vaddr = current_running->fault_addr; 

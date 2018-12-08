@@ -87,7 +87,7 @@ void scheduler(void)
 
   /* .. and run it */
   // debug
-  scrprintf(5+current_running->pid, 1, "%d: schedule %d", get_timer(), current_running->pid);
+  //scrprintf(5+current_running->pid, 30, "%d: schedule %d", get_timer(), current_running->pid);
   dispatch();
 }
 
@@ -222,7 +222,7 @@ static void insert_job(pcb_t * job, pcb_t * q)
 static void remove_job(pcb_t * job)
 {
   // debug
-  scrprintf(10, 1, "%d:remove %d from rq", get_timer(), job->pid);
+  //scrprintf(5, 30, "%d:remove %d from rq", get_timer(), job->pid);
   job->previous->next = job->next;
   job->next->previous = job->previous;
 }
