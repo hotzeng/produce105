@@ -201,7 +201,7 @@ void init_memory(void){
     {
       if (vaddr >= MAX_PHYSICAL_MEMORY)
         break;
-      init_ptab_entry(kernel_ptabs[i], vaddr, vaddr, PE_P | PE_RW);
+      init_ptab_entry((uint32_t) kernel_ptabs[i] & PE_BASE_ADDR_MASK, vaddr, vaddr, PE_P | PE_RW);
        vaddr += PAGE_SIZE;
     }
   }
@@ -226,7 +226,7 @@ void setup_page_table(pcb_t * p){
   uint32_t page_idx = page_alloc(1);
   page_map[page_idx].is_table = TRUE;
   p->page_directory = page_addr(page_idx);
-  insert_ptab_dir(p->page_directory, kernel_ptabs[0], 0, 7); // only one page table for each process ???
+  insert_ptab_dir(p->page_directory, kernel_ptabs[0], 0, 7);
 
 
   uint32_t i;
@@ -241,20 +241,20 @@ void setup_page_table(pcb_t * p){
   insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, 7); // only one page table for each process ???
   //insert_ptab_dir(p->page_directory, page_addr(page_idx), vaddr, PE_P|PE_RW|PE_US); // only one page table for each process ???
    
-  uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE; 
-  // write page table entries
-  for(i = 0; i < page_num; i++) {
-    uint32_t page_idx = page_alloc(0);
-    uint32_t paddr = page_addr(page_idx);
-    // get the table for kernel
-    int idx = get_dir_idx(vaddr);    
-    uint32_t table = p->page_directory[idx];
-    uint32_t mode = 7;
-    page_map[page_idx].swap_loc = p->swap_loc;
-    page_map[page_idx].vaddr = vaddr;
-    init_ptab_entry( table, vaddr, paddr, mode );
-    vaddr += PAGE_SIZE;
-  }
+  // uint32_t page_num = p->swap_size * SECTOR_SIZE / PAGE_SIZE; 
+  // // write page table entries
+  // for(i = 0; i < page_num; i++) {
+  //   uint32_t page_idx = page_alloc(0);
+  //   uint32_t paddr = page_addr(page_idx);
+  //   // get the table for kernel
+  //   int idx = get_dir_idx(vaddr);    
+  //   uint32_t table = p->page_directory[idx];
+  //   uint32_t mode = 7;
+  //   page_map[page_idx].swap_loc = p->swap_loc;
+  //   page_map[page_idx].vaddr = vaddr;
+  //   init_ptab_entry( table, vaddr, paddr, mode );
+  //   vaddr += PAGE_SIZE;
+  // }
   
   // allocate stack page table
   page_idx = page_alloc(1);
@@ -265,7 +265,7 @@ void setup_page_table(pcb_t * p){
   for(i = 0; i < N_PROCESS_STACK_PAGES; i++) {
     page_idx = page_alloc(1);
     uint32_t stack_page = page_addr(page_idx);
-    init_ptab_entry(stack_table, p->user_stack - i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
+    init_ptab_entry(stack_table & PE_BASE_ADDR_MASK, p->user_stack - i * PAGE_SIZE, stack_page, PE_P|PE_RW|PE_US);  // Does stack grow into higher address?
   }
   
 }
@@ -283,16 +283,15 @@ void page_fault_handler(void){
 
 
   current_running->page_fault_count++;
-  int i = page_alloc(0); //require complete implementation of page_alloc!!
+  int i = page_alloc(0); 
 
-  // remember to set swap_loc at beginning
   page_map[i].swap_loc = current_running->swap_loc;
   page_map[i].vaddr = vaddr;
 
   page_swap_in(i);
 
   uint32_t dir = get_dir_idx(vaddr);
-  init_ptab_entry(current_running->page_directory[dir], vaddr, page_addr(i), 7);
+  init_ptab_entry(current_running->page_directory[dir] & PE_BASE_ADDR_MASK, vaddr, page_addr(i), 7);
 
   lock_release(&page_fault_lock);
   
