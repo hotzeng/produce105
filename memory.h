@@ -55,6 +55,7 @@ typedef struct {
   int      is_table;
   int      free;
   int      pinned;
+  pcb_t *  pcb;
 	// Fill in ...
 } page_map_entry_t;
 

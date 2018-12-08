@@ -147,6 +147,7 @@ int page_alloc(int pinned){
   page_map[index].pinned = pinned;
   page_map[index].is_table = FALSE;
   page_map[index].free = FALSE;
+  page_map[index].pcb = current_running;
 
   //bzero((char *)page_addr(index), PAGE_SIZE);
   for (i = 0; i < PAGE_N_ENTRIES; ++i) {
@@ -337,7 +338,7 @@ void page_swap_out(int i){
     int i =0 ;
     i++;
   }
-  set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 0); 
+  set_ptab_entry_flags(page_map[i].pcb->page_directory, page_map[i].vaddr, 0); 
   flush_tlb_entry(page_map[i].vaddr);
 }
 
