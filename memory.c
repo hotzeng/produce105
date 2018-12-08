@@ -139,8 +139,10 @@ int page_alloc(int pinned){
     page_swap_out(index);
   }
   // modified by yuzeng
-  if(!pinned)
-    fifo_queue[head++] = index;
+  if(!pinned){
+    fifo_queue[head] = index;
+    head = (head + 1) % PAGEABLE_PAGES;
+  }
 
   page_map[index].pinned = pinned;
   page_map[index].is_table = FALSE;
@@ -310,6 +312,12 @@ void page_swap_in(int i){
 
   scsi_read(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
   // set the mode of the page table entry
+  uint32_t dir_idx = get_dir_idx((uint32_t) page_map[i].vaddr);
+  uint32_t dir_entry = current_running->page_directory[dir_idx];
+  if(!(dir_entry & PE_P)) {
+    int i =0 ;
+    i++;
+  }
   set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 7); 
   flush_tlb_entry(page_map[i].vaddr);
 }
@@ -323,6 +331,12 @@ void page_swap_in(int i){
 void page_swap_out(int i){
   int disk_sector = get_disk_sector(&page_map[i]);
   scsi_write(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
+  uint32_t dir_idx = get_dir_idx((uint32_t) page_map[i].vaddr);
+  uint32_t dir_entry = current_running->page_directory[dir_idx];
+  if(!(dir_entry & PE_P)) {
+    int i =0 ;
+    i++;
+  }
   set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 0); 
   flush_tlb_entry(page_map[i].vaddr);
 }
@@ -332,5 +346,7 @@ void page_swap_out(int i){
 int page_replacement_policy(void){
   if(head == tail) 
     ASSERT(0);
-  return fifo_queue[tail++]; 
+  int prev_tail = tail;
+  tail = (tail + 1) % PAGEABLE_PAGES;
+  return fifo_queue[prev_tail]; 
 }
