@@ -30,7 +30,7 @@ enum {
 
   /* Constants to simulate a very small physical memory. */
   MEM_START = 0x100000, /* 1MB */
-  PAGEABLE_PAGES = 33,
+  PAGEABLE_PAGES = 21,
   MAX_PHYSICAL_MEMORY = (MEM_START + PAGEABLE_PAGES * PAGE_SIZE),
 
   /* number of kernel page tables */
@@ -50,13 +50,17 @@ enum {
 
 /* TODO: Structure of an entry in the page map */
 typedef struct {
-	uint32_t	swap_loc;
-	uint32_t	vaddr;
+  uint32_t  swap_loc;
+  uint32_t  swap_size;
+  uint32_t  vaddr;
   int      is_table;
   int      free;
   int      pinned;
-  pcb_t *  pcb;
-	// Fill in ...
+  uint32_t *pdir;
+  //uint32_t chance;
+  uint32_t owner;
+
+  // Fill in ...
 } page_map_entry_t;
 
 

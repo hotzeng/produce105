@@ -46,6 +46,25 @@ static uint32_t kernel_vaddr_next = 0;
 static uint32_t fifo_queue[PAGEABLE_PAGES];
 static uint32_t head;
 static uint32_t tail;
+// for NRU algorithm
+static uint32_t NN[PAGEABLE_PAGES];
+static uint32_t NN_head;
+
+static uint32_t NM[PAGEABLE_PAGES];
+static uint32_t NM_head;
+
+static uint32_t RN[PAGEABLE_PAGES];
+static uint32_t RN_head;
+
+static uint32_t RM[PAGEABLE_PAGES];
+static uint32_t RM_head;
+
+enum {
+  FIFO = 0,
+  FIFO_SECOND_CHANCE = 1,
+  NRU = 2
+};
+static uint32_t ALGORITHM = FIFO;
 
 // lock used in page_fault_handler
 static lock_t page_fault_lock;
@@ -89,6 +108,19 @@ void set_ptab_entry_flags(uint32_t * pdir, uint32_t vaddr, uint32_t mode){
   flush_tlb_entry(vaddr);
 }
 
+uint32_t get_ptab_entry(uint32_t * pdir, uint32_t vaddr) {
+  uint32_t dir_idx = get_dir_idx((uint32_t) vaddr);
+  uint32_t tab_idx = get_tab_idx((uint32_t) vaddr);
+  uint32_t dir_entry;
+  uint32_t *tab;
+  uint32_t entry;
+
+  dir_entry = pdir[dir_idx];
+  ASSERT(dir_entry & PE_P); /* dir entry present */
+  tab = (uint32_t *) (dir_entry & PE_BASE_ADDR_MASK);
+  return tab[tab_idx];
+}
+
 /* Initialize a page table entry
  *  
  * 'vaddr' is the virtual address which is mapped to the physical
@@ -110,7 +142,7 @@ void init_ptab_entry(uint32_t * table, uint32_t vaddr,
  * 'mode' sets bit [12..0] in the page table entry.
  */
 void insert_ptab_dir(uint32_t * dir, uint32_t *tab, uint32_t vaddr, 
-		       uint32_t mode){
+           uint32_t mode){
 
   uint32_t access = mode & MODE_MASK;
   int idx = get_dir_idx(vaddr);
@@ -141,13 +173,16 @@ int page_alloc(int pinned){
   // modified by yuzeng
   if(!pinned){
     fifo_queue[head] = index;
+    //page_map[index].chance = 1;
     head = (head + 1) % PAGEABLE_PAGES;
   }
 
   page_map[index].pinned = pinned;
   page_map[index].is_table = FALSE;
   page_map[index].free = FALSE;
-  page_map[index].pcb = current_running;
+  page_map[index].swap_size = current_running->swap_size;
+  page_map[index].owner = current_running->pid;
+
 
   //bzero((char *)page_addr(index), PAGE_SIZE);
   for (i = 0; i < PAGE_N_ENTRIES; ++i) {
@@ -202,8 +237,9 @@ void init_memory(void){
 
     for (j = 0; j < PAGE_N_ENTRIES; j++)
     {
-      if (vaddr >= MAX_PHYSICAL_MEMORY)
+      if (vaddr >= MAX_PHYSICAL_MEMORY) {
         break;
+      }
       init_ptab_entry((uint32_t) kernel_ptabs[i] & PE_BASE_ADDR_MASK, vaddr, vaddr, PE_P | PE_RW);
        vaddr += PAGE_SIZE;
     }
@@ -289,12 +325,17 @@ void page_fault_handler(void){
   int i = page_alloc(0); 
 
   page_map[i].swap_loc = current_running->swap_loc;
+  page_map[i].swap_size = current_running->swap_size;
   page_map[i].vaddr = vaddr;
+  page_map[i].pdir = current_running->page_directory;
+
+  // page_map[i].swap_loc = current_running->swap_loc;
+  // page_map[i].vaddr = vaddr;
 
   page_swap_in(i);
 
   uint32_t dir = get_dir_idx(vaddr);
-  init_ptab_entry(current_running->page_directory[dir] & PE_BASE_ADDR_MASK, vaddr, page_addr(i), 7);
+  init_ptab_entry(current_running->page_directory[dir] & PE_BASE_ADDR_MASK, vaddr, page_addr(i), PE_P | PE_RW | PE_US);
 
   lock_release(&page_fault_lock);
   
@@ -311,16 +352,16 @@ int get_disk_sector(page_map_entry_t * page){
 void page_swap_in(int i){
   int disk_sector = get_disk_sector(&page_map[i]);
 
-  scsi_read(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
-  // set the mode of the page table entry
-  uint32_t dir_idx = get_dir_idx((uint32_t) page_map[i].vaddr);
-  uint32_t dir_entry = current_running->page_directory[dir_idx];
-  if(!(dir_entry & PE_P)) {
-    int i =0 ;
-    i++;
+  //regular page 
+  if ((disk_sector + SECTORS_PER_PAGE) <= (page_map[i].swap_loc + page_map[i].swap_size)) {
+    scsi_read(disk_sector, SECTORS_PER_PAGE, (char *)page_addr(i)); 
   }
-  set_ptab_entry_flags(current_running->page_directory, page_map[i].vaddr, 7); 
-  flush_tlb_entry(page_map[i].vaddr);
+  
+  //last page
+  else {  
+    int diff = (disk_sector + SECTORS_PER_PAGE) - (page_map[i].swap_loc + page_map[i].swap_size);
+     scsi_read(disk_sector, SECTORS_PER_PAGE - diff, (char *)page_addr(i)); 
+  }
 }
 
 /* TODO: Swap i-th page out to disk.
@@ -331,23 +372,144 @@ void page_swap_in(int i){
  */
 void page_swap_out(int i){
   int disk_sector = get_disk_sector(&page_map[i]);
-  scsi_write(disk_sector, SECTORS_PER_PAGE, (char *) page_addr(i));
-  uint32_t dir_idx = get_dir_idx((uint32_t) page_map[i].vaddr);
-  uint32_t dir_entry = current_running->page_directory[dir_idx];
-  if(!(dir_entry & PE_P)) {
-    int i =0 ;
-    i++;
+  set_ptab_entry_flags(page_map[i].pdir, page_map[i].vaddr, PE_RW | PE_US ); 
+
+  uint32_t ptab_entry = get_ptab_entry(page_map[i].pdir, page_map[i].vaddr);
+  bool_t dirty;
+  if (ptab_entry & PE_D > 0) {
+    dirty = TRUE;
   }
-  set_ptab_entry_flags(page_map[i].pcb->page_directory, page_map[i].vaddr, 0); 
+  else {
+    dirty = FALSE;
+  }
+
+  if (1) {
+    // regular page
+    if ((disk_sector + SECTORS_PER_PAGE) <= (page_map[i].swap_loc + page_map[i].swap_size))
+      scsi_write(disk_sector, SECTORS_PER_PAGE, (char *)page_addr(i)); 
+    
+    // last page 
+    else {  
+      int diff = (disk_sector + SECTORS_PER_PAGE) - (page_map[i].swap_loc + page_map[i].swap_size);
+      scsi_write(disk_sector, SECTORS_PER_PAGE - diff, (char *)page_addr(i)); 
+    }
+  }
+
+  page_map[i].free = TRUE; 
+
   flush_tlb_entry(page_map[i].vaddr);
+  
 }
 
 
 /* TODO: Decide which page to replace, return the page number  */
 int page_replacement_policy(void){
-  if(head == tail) 
-    ASSERT(0);
-  int prev_tail = tail;
-  tail = (tail + 1) % PAGEABLE_PAGES;
-  return fifo_queue[prev_tail]; 
+  if (ALGORITHM == FIFO) {
+    if(head == tail) 
+      ASSERT(0);
+    int prev_tail = tail;
+    tail = (tail + 1) % PAGEABLE_PAGES;
+    return fifo_queue[prev_tail];
+  }
+  else if (ALGORITHM == FIFO_SECOND_CHANCE) {
+    if(head == tail)
+      ASSERT(0);
+    uint32_t ptab_entry;
+    while(1) {
+      int page_idx = fifo_queue[tail];
+      ptab_entry = get_ptab_entry(page_map[page_idx].pdir, page_map[page_idx].vaddr);
+      if(ptab_entry & PE_A) {
+        set_ptab_entry_flags(page_map[page_idx].pdir, page_map[page_idx].vaddr, (ptab_entry & ~PE_A));
+        flush_tlb_entry(page_map[page_idx].vaddr);
+        fifo_queue[head] = fifo_queue[tail];   
+        head = (head + 1) % PAGEABLE_PAGES;         
+        tail = (tail + 1) % PAGEABLE_PAGES;      
+      }
+      else
+        break;
+    }
+    int prev_tail = tail;
+    tail = (tail + 1) % PAGEABLE_PAGES;    
+    return fifo_queue[prev_tail];  
+  }
+  else if (ALGORITHM == NRU) {
+    // loop all the pages in queue and put into 4 queues
+    if(head == tail) {
+      ASSERT(0);
+    }
+    uint32_t i;
+    uint32_t page_idx;
+    bool_t R;
+    bool_t M;
+    uint32_t ptab_entry;
+    uint32_t return_page_idx;
+    NN_head = 0;
+    NM_head = 0;
+    RN_head = 0;
+    RM_head = 0;
+    for(i = tail; i != head; i = (i+1) % PAGEABLE_PAGES) {
+      page_idx = fifo_queue[i];
+      ptab_entry = get_ptab_entry(page_map[page_idx].pdir, page_map[page_idx].vaddr);
+      if ((ptab_entry & PE_A) > 0) {
+        R = TRUE;
+      }
+      else {
+        R = FALSE;
+      }
+
+      if ((ptab_entry & PE_D) > 0) {
+        M = TRUE;
+      }
+      else {
+        M = FALSE;
+      }
+
+      if(!R && !M) {
+        NN[NN_head++] = page_idx;
+      }
+      else if(!R && M) {
+        NM[NM_head++] = page_idx;
+      }
+      else if(R && !M) {
+        RN[RN_head++] = page_idx;
+      }
+      else {
+        RM[RM_head++] = page_idx;
+      }      
+    }
+    // Randomly select one page from the lowest unempty queue
+    if (NN_head != 0) {
+      return_page_idx = NN[rand() % NN_head];
+    }
+    else if(NM_head != 0) {
+      return_page_idx = NM[rand() % NM_head];
+    }
+    else if(RN_head != 0) {
+      return_page_idx = RN[rand() % RN_head];
+    }
+    else {
+      return_page_idx = RM[rand() % RM_head];
+    }
+
+    for(i = tail; i != head; i = (i+1) % PAGEABLE_PAGES) {
+      // clear reference/access bits
+      page_idx = fifo_queue[i]; 
+      ptab_entry = get_ptab_entry(page_map[page_idx].pdir, page_map[page_idx].vaddr);
+      set_ptab_entry_flags(page_map[page_idx].pdir, page_map[page_idx].vaddr, (ptab_entry));
+      flush_tlb_entry(page_map[page_idx].vaddr);
+    }    
+
+    for(i = tail; i != head; i = (i+1) % PAGEABLE_PAGES) {
+      page_idx = fifo_queue[i]; 
+      if(page_idx != return_page_idx) {
+        continue;
+      }
+      fifo_queue[i] = fifo_queue[tail];
+      tail = (tail + 1) % PAGEABLE_PAGES;
+      break;
+    }  
+    return return_page_idx;
+  }
+  else
+    ASSERT(0); 
 }
