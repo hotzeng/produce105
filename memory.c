@@ -64,7 +64,7 @@ enum {
   FIFO_SECOND_CHANCE = 1,
   NRU = 2
 };
-static uint32_t ALGORITHM = FIFO;
+static uint32_t ALGORITHM = NRU;
 
 // lock used in page_fault_handler
 static lock_t page_fault_lock;
@@ -495,7 +495,7 @@ int page_replacement_policy(void){
       // clear reference/access bits
       page_idx = fifo_queue[i]; 
       ptab_entry = get_ptab_entry(page_map[page_idx].pdir, page_map[page_idx].vaddr);
-      set_ptab_entry_flags(page_map[page_idx].pdir, page_map[page_idx].vaddr, (ptab_entry));
+      set_ptab_entry_flags(page_map[page_idx].pdir, page_map[page_idx].vaddr, (ptab_entry & ~PE_A));
       flush_tlb_entry(page_map[page_idx].vaddr);
     }    
 

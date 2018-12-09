@@ -30,7 +30,7 @@ enum {
 
   /* Constants to simulate a very small physical memory. */
   MEM_START = 0x100000, /* 1MB */
-  PAGEABLE_PAGES = 21,
+  PAGEABLE_PAGES = 20,
   MAX_PHYSICAL_MEMORY = (MEM_START + PAGEABLE_PAGES * PAGE_SIZE),
 
   /* number of kernel page tables */
